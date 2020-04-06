@@ -2,11 +2,12 @@ import regeneratorRuntime from "regenerator-runtime";
 import { h, app } from "hyperapp";
 import { Link, Route, location, Switch } from "@hyperapp/router";
 import axios from 'axios';
-const { utils, Wallet } = require('ethers');
+const { utils, Wallet, ethers } = require('ethers');
 const { sendTransaction, balanceOf, call, Eth, onReceipt } = require('ethjs-extras');
 const wrapper = require('solc/wrapper');
 const solc = wrapper(window.Module);
 const yulp = require('../src/index');
+import ERC32abi from '../examples/ERC20abi.js';
 
 // local packages..
 const styled = require('./lib/styled-elements').default;
@@ -22,9 +23,11 @@ const state = {
     'input.yul': {}
   },
   errors: [],
+  errors_deploy: [],
 };
 
 var editor;
+var yuleditor;
 
 // localmemory storage
 let localMemory = {};
@@ -45,6 +48,11 @@ const actions = {
 
     editor.renderer.on('afterRender', actions.autoCompile);
   },
+  loadyul: () => (state, actions) => {
+    yuleditor = ace.edit("editoryul");
+    yuleditor.session.setMode("ace/mode/javascript");
+    yuleditor.getSession().setUseWorker(false);
+  },
   autoCompile: () => (state, actions) => {
     if (state.autoCompile) actions.compile();
   },
@@ -60,8 +68,6 @@ const actions = {
 
       console.log(yulpError);
     }
-
-    console.log(yulpResult);
 
     var output = JSON.parse(solc.compile(JSON.stringify({
       "language": "Yul",
@@ -79,6 +85,29 @@ const actions = {
       yulpResult: yulpResult,
       errors: yulpError || output.errors,
     });
+  },
+  deploy: () => async (state, actions) => {
+    console.log('deploy', state, actions);
+    const contracti = Object.values(state.contracts['input.yul'])[0];
+    if (!contracti) return;
+
+    const bytecode = contracti.evm.bytecode.object;
+    const args = [];
+    // const args = ["0x79F379CebBD362c99Af2765d1fa541415aa78508", 1000000000];
+    const abi = ERC32abi;
+
+    let provider = new ethers.providers.Web3Provider(web3.currentProvider);
+    const signer = provider.getSigner();
+
+    let factory = new ethers.ContractFactory(abi, bytecode, signer);
+    let contract = await factory.deploy(...args).catch(e => {
+      actions.change({
+        errors_deploy: [e.data],
+      });
+    });
+    if (!contract) return;
+    console.log(contract.address);
+    await contract.deployed();
   },
   dark: () => (state, actions) => {
     var darky = !state.dark;
@@ -143,11 +172,15 @@ const NotFound = () => (
   </div>
 );
 
-const Code = () => (state, actions) => (
+const Code = () => (state, actions) => {
+  const yulcode = state.yulpResult || '';
+  if (yuleditor) yuleditor.setValue(yulcode);
+
+  return (
   <div style={`display: flex; flex-direction: row; ${state.dark ? 'color: rgb(248, 248, 242);' : 'color: #000;'}`}>
-    <div style="flex-direction: row; position: relative; width: 70%">
+    <div style="flex-direction: row; position: relative; width: 40%">
       <div id="editor" oncreate={actions.load}
-      style="width: 70%; height: 100%; position: fixed; font-size: 14px;">{
+      style="width: 40%; height: 100%; position: fixed; font-size: 12px;">{
         local.getItem('code') || `
 object "SimpleStore" {
   code {
@@ -178,8 +211,17 @@ object "SimpleStore" {
 }
 `}</div>
     </div>
-    <div style={`width: 27%; height: 100%; margin-left: 3%; font-family: Monaco, Menlo, Consolas, source-code-pro, monospace; display: flex; flex-direction: column; word-wrap: break-word;`}>
-      <button style="padding: 20px; margin-bottom: 20px;" onclick={actions.compile}>Compile</button>
+    <div style="flex-direction: row; position: relative; width: 40%">
+      <div id="editoryul" oncreate={actions.loadyul}
+      style="width: 40%; height: 100%; position: fixed; font-size: 12px;">{yulcode}</div>
+    </div>
+    <div style={`width: 19%; height: 100%; margin-left: 1%; font-family: Monaco, Menlo, Consolas, source-code-pro, monospace; display: flex; flex-direction: column; word-wrap: break-word;`}>
+
+      <button style="padding: 20px; margin-bottom: 10px;" onclick={actions.deploy}>Deploy</button>
+      <h3>Deployment Errors</h3>
+      {state.errors_deploy.map(v => `${v.formattedMessage || v.message}. ${v.data && v.data.stack ? v.data.stack : ''}`)}
+
+      <button style="padding: 20px; margin-bottom: 20px; margin-top: 10px;" onclick={actions.compile}>Compile</button>
 
       <div style="display: flex; flex-direction: row;">
         <div>
@@ -231,6 +273,7 @@ object "SimpleStore" {
     </div>
   </div>
 );
+}
 
 // routes for app
 const Routes = () => (
