@@ -23,6 +23,7 @@
     ":": ":",
     MAX_UINTLiteral: /(?:MAX_UINT)/,
     SigLiteral: /(?:sig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
+    DTSigLiteral: /(?:dtsig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     DTypeAbiLiteral: /(?:abi)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     TopicLiteral: /(?:topic)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     codeKeyword: /(?:code)(?:\s)/,
@@ -572,6 +573,17 @@ SigLiteral -> %SigLiteral {%
     };
   }
 %}
+DTSigLiteral -> %DTSigLiteral {%
+  function(d) {
+    const sig = dtypeutils.stringToSig(d[0].value);
+    return { type: 'HexNumber',
+      isSignature: true,
+      signature: d[0].value.trim(),
+      value: sig,
+      text: sig,
+    };
+  }
+%}
 DTypeAbiLiteral -> %DTypeAbiLiteral {%
   function(d) {
     const abi = stringToSig(d[0].value.trim().slice(4).slice(0, -1)); // remove sig" and "
@@ -651,6 +663,7 @@ IfStatement -> "if" _ Expression _ Block
 NumericLiteral -> %NumberLiteral {% id %}
   | %HexNumber {% id %}
   | SigLiteral {% id %}
+  | DTSigLiteral {% id %}
   | DTypeAbiLiteral {% id %}
   | TopicLiteral {% id %}
 Literal -> %StringLiteral {% id %}

@@ -27,6 +27,7 @@ function id(x) { return x[0]; }
     ":": ":",
     MAX_UINTLiteral: /(?:MAX_UINT)/,
     SigLiteral: /(?:sig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
+    DTSigLiteral: /(?:dtsig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     DTypeAbiLiteral: /(?:abi)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     TopicLiteral: /(?:topic)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     codeKeyword: /(?:code)(?:\s)/,
@@ -590,6 +591,17 @@ var grammar = {
           };
         }
         },
+    {"name": "DTSigLiteral", "symbols": [(lexer.has("DTSigLiteral") ? {type: "DTSigLiteral"} : DTSigLiteral)], "postprocess": 
+        function(d) {
+          const sig = dtypeutils.stringToSig(d[0].value);
+          return { type: 'HexNumber',
+            isSignature: true,
+            signature: d[0].value.trim(),
+            value: sig,
+            text: sig,
+          };
+        }
+        },
     {"name": "DTypeAbiLiteral", "symbols": [(lexer.has("DTypeAbiLiteral") ? {type: "DTypeAbiLiteral"} : DTypeAbiLiteral)], "postprocess": 
         function(d) {
           const abi = stringToSig(d[0].value.trim().slice(4).slice(0, -1)); // remove sig" and "
@@ -677,6 +689,7 @@ var grammar = {
     {"name": "NumericLiteral", "symbols": [(lexer.has("NumberLiteral") ? {type: "NumberLiteral"} : NumberLiteral)], "postprocess": id},
     {"name": "NumericLiteral", "symbols": [(lexer.has("HexNumber") ? {type: "HexNumber"} : HexNumber)], "postprocess": id},
     {"name": "NumericLiteral", "symbols": ["SigLiteral"], "postprocess": id},
+    {"name": "NumericLiteral", "symbols": ["DTSigLiteral"], "postprocess": id},
     {"name": "NumericLiteral", "symbols": ["DTypeAbiLiteral"], "postprocess": id},
     {"name": "NumericLiteral", "symbols": ["TopicLiteral"], "postprocess": id},
     {"name": "Literal", "symbols": [(lexer.has("StringLiteral") ? {type: "StringLiteral"} : StringLiteral)], "postprocess": id},
@@ -722,13 +735,12 @@ var grammar = {
         },
     {"name": "DTypeMemoryStructIdentifier", "symbols": [(lexer.has("Identifier") ? {type: "Identifier"} : Identifier), "_", {"literal":":"}, "_", (lexer.has("Identifier") ? {type: "Identifier"} : Identifier)], "postprocess": 
         function (d) {
-          console.log('DTypeMemoryStructIdentifier', d);
+          // console.log('DTypeMemoryStructIdentifier', d);
           // TODO anything to check?
           // TODO maybe here we get the dtype data and pass it down
         
           const value = d[4];
           value.dtype = dtypeutils.getById(value.value);
-          console.log('DTypeMemoryStructIdentifier', value, value.dtype);
           value.dtype.length = dtypeutils.sizeBytes(value.dtype);
         
           return {
@@ -762,9 +774,9 @@ var grammar = {
             console.log('MemoryStructDeclaration', d);
             const name = d[2].value;
             const properties = _filter(d[6], 'MemoryStructIdentifier');
-            console.log('MemoryStructDeclaration properties', properties);
+            // console.log('MemoryStructDeclaration properties', properties);
             let methodList = properties.map(v => name + '.' + v.name);
-            console.log('MemoryStructDeclaration methodList', methodList);
+            // console.log('MemoryStructDeclaration methodList', methodList);
             // check for array length specifiers
             for (var p = 0; p < properties.length; p++) {
               const prop = properties[p];
