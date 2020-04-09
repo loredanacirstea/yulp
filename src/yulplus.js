@@ -6,7 +6,7 @@ function id(x) { return x[0]; }
   const moo = require('moo')
   const { utils } = require('ethers');
   const clone = require('rfdc')() // Returns the deep copy function
-  const { dtypes } = require('./yulplusdt.js')
+  const { dtypeutils } = require('./yulplusdt.js')
 
   function id(x) { return x[0]; }
 
@@ -727,7 +727,9 @@ var grammar = {
           // TODO maybe here we get the dtype data and pass it down
         
           const value = d[4];
-          value.dtype = dtypes[d[4].value];
+          value.dtype = dtypeutils.getById(value.value);
+          console.log('DTypeMemoryStructIdentifier', value, value.dtype);
+          value.dtype.length = dtypeutils.sizeBytes(value.dtype);
         
           return {
             type: 'DTypeMemoryStructIdentifier',
@@ -948,22 +950,22 @@ var grammar = {
                 size: v.value.type === 'ArraySpecifier'
                   ? ('mul('
                     + acc[name + '.' + v.name + '.length'].slice
-                    + ', ' + v.value.dtype.size + ')')
-                  : v.value.dtype.size,
+                    + ', ' + v.value.dtype.length + ')')
+                  : v.value.dtype.length,
                 offset: addValues(methodList.slice(0, i)
                   .map(name => acc[name].size)),
                 slice: `mslice(${addValues(['pos'].concat(methodList.slice(0, i)
-                  .map(name => acc[name].size)))}, ${v.value.dtype.size})`,
+                  .map(name => acc[name].size)))}, ${v.value.dtype.length})`,
                 method: v.value.type === 'ArraySpecifier' ?
         `
         function ${name + '.' + v.name}(pos, i) -> res {
           res := mslice(add(${name + '.' + v.name}.position(pos),
-            mul(i, ${v.value.dtype.size})), ${v.value.dtype.size})
+            mul(i, ${v.value.dtype.length})), ${v.value.dtype.length})
         }
         `
         : `
         function ${name + '.' + v.name}(pos) -> res {
-          res := mslice(${name + '.' + v.name}.position(pos), ${v.value.dtype.size})
+          res := mslice(${name + '.' + v.name}.position(pos), ${v.value.dtype.length})
         }
         `,
                 required: [
@@ -1000,8 +1002,8 @@ var grammar = {
                 method: `
         function ${name + '.' + v.name + '.offset'}(pos) -> _offset {
         ${v.value.type === 'ArraySpecifier'
-          ? `_offset := add(${name + '.' + v.name + '.position(pos)'}, mul(${name + '.' + v.name + '.length(pos)'}, ${v.value.dtype.size}))`
-          : `_offset := add(${name + '.' + v.name + '.position(pos)'}, ${v.value.dtype.size})`}
+          ? `_offset := add(${name + '.' + v.name + '.position(pos)'}, mul(${name + '.' + v.name + '.length(pos)'}, ${v.value.dtype.length}))`
+          : `_offset := add(${name + '.' + v.name + '.position(pos)'}, ${v.value.dtype.length})`}
         }
         `,
                 required: (v.value.type === 'ArraySpecifier'
@@ -1021,7 +1023,7 @@ var grammar = {
               [name + '.' + v.name + '.size']: {
                 method: `
         function ${name + '.' + v.name + '.size'}() -> _size {
-          _size := ${v.value.dtype.size}
+          _size := ${v.value.dtype.length}
         }
         `,
                 required: [],
