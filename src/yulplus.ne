@@ -887,9 +887,6 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
   function (d) {
     const name = d[2].value;
     const properties = _filter(d[6], 'DTypeMemoryStructIdentifier');
-    const sizeLen = 4;
-    const sizeCount = properties.length;
-    const sizesSize = sizeLen * sizeCount;
     const arrayLengthSize = 4;
 
 

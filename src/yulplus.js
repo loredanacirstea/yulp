@@ -929,9 +929,6 @@ var grammar = {
             console.log('DTypeMemoryStructDeclaration2', d);
             const name = d[2].value;
             const properties = _filter(d[6], 'DTypeMemoryStructIdentifier');
-            const sizeLen = 4;
-            const sizeCount = properties.length;
-            const sizesSize = sizeLen * sizeCount;
             const arrayLengthSize = 4;
         
             console.log('DTypeMemoryStructDeclaration properties', properties);
