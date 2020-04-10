@@ -701,11 +701,13 @@ MemoryStructIdentifier -> %Identifier _ ":" _ ( NumericLiteral | ArraySpecifier 
 DTypeMemoryStructIdentifier -> %Identifier _ ":" _ %Identifier {%
   function (d) {
     // TODO anything to check?
-    // TODO maybe here we get the dtype data and pass it down
 
     const value = d[4];
     value.dtype = dtypeutils.getById(value.value);
     value.dtype.length = dtypeutils.sizeBytes(value.dtype);
+    if (value.dtype.type === 'array') {
+      value.dtype.itemlength = dtypeutils.sizeBytes(value.dtype.inputs[0].type);
+    }
 
     return {
       type: 'DTypeMemoryStructIdentifier',
@@ -888,6 +890,7 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
     const sizeLen = 4;
     const sizeCount = properties.length;
     const sizesSize = sizeLen * sizeCount;
+    const arrayLengthSize = 4;
 
 
     let methodList = properties.map(v => name + '.' + v.name);
@@ -902,54 +905,32 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
       }
     }
 
-    let dataMap =  {};
-    properties.map((v, i) => {
-      const pos = '0x' + (0 * i).toString(16).padStart(2,'0');
-      dataMap[`CalldataSizes.size${i}.position`] = {
-        method: `
-  function CalldataSizes.size${i}.position(pos) -> _offset {
-    _offset := add(${pos}, add(pos, 0))
-  }
-  `,
-      required: [],
-      };
-      dataMap[`CalldataSizes.size${i}`] = {
-        method: `
-  function CalldataSizes.size${i} (pos) -> res {
-    res := mslice(CalldataSizes.size${i}.position(pos), ${sizeLen})
-  }
-  `,
-        required: [`CalldataSizes.size${i}.position`],
-      };
-    });
-
-    properties.reduce((acc, v, i) => Object.assign(dataMap, acc, {
+    // properties.reduce((acc, v, i) => Object.assign(dataMap, acc, {
+    let dataMap = properties.reduce((acc, v, i) => Object.assign(acc, {
       [name + '.' + v.name]: {
-        size: v.value.type === 'ArraySpecifier'
-          ? ('mul('
-            + acc[name + '.' + v.name + '.length'].slice
-            + ', ' + v.value.dtype.length + ')')
-          : v.value.dtype.length,
+        size: v.value.dtype.length,
         offset: addValues(methodList.slice(0, i)
           .map(name => acc[name].size)),
         slice: `mslice(${addValues(['pos'].concat(methodList.slice(0, i)
           .map(name => acc[name].size)))}, ${v.value.dtype.length})`,
-        method: v.value.type === 'ArraySpecifier' ?
+        method: v.value.dtype.type === 'array' ?
 `
 function ${name + '.' + v.name}(pos, i) -> res {
-  res := mslice(add(${name + '.' + v.name}.position(pos),
-    mul(i, ${v.value.dtype.length})), ${v.value.dtype.length})
+  res := mslice(add(${name + '.' + v.name}.${v.value.dtype.length ? 'position' : 'values.position'}(pos),
+    mul(i, ${v.value.dtype.itemlength})), ${v.value.dtype.itemlength})
 }
 `
 : `
 function ${name + '.' + v.name}(pos) -> res {
-  res := mslice(${name + '.' + v.name}.position(safeAdd(pos, ${sizesSize})), CalldataSizes.size${i}(pos))
+  res := mslice(${name + '.' + v.name}.position(pos), ${v.value.dtype.length})
 }
 `,
         required: [
           name + '.' + v.name + '.position',
-          `CalldataSizes.size${i}`,
-        ],
+        ].concat(v.value.dtype.type === 'array' && !v.value.dtype.length
+          ? [name + '.' + v.name + '.values.position']
+          : []
+        ),
       },
       [name + '.' + v.name + '.keccak256']: {
         method: `
@@ -971,8 +952,21 @@ function ${name + '.' + v.name + '.keccak256'}(pos) -> _hash {
       [name + '.' + v.name + '.position']: {
         method: `
 function ${name + '.' + v.name + '.position'}(pos) -> _offset {
-  _offset := ${addValues(['pos'].concat(methodList.slice(0, i)
-    .map(name => acc[name].size)))}
+  _offset := ${addValues(['pos']
+      .concat(methodList.slice(0, i).map(name => acc[name].size))
+      .concat(methodList.slice(0, i)
+        .filter((name, ind) => properties[ind].value.dtype.type === 'array' && !properties[ind].value.dtype.length)
+        .map(name => name + '.size(pos)'))
+    )}
+}
+`,
+        required: methodList.filter((name, ind) => properties[ind].value.dtype.type === 'array' && !properties[ind].value.dtype.length)
+          .map(name => name + '.size'),
+      },
+      [name + '.' + v.name + '.values.position']: {
+        method: `
+function ${name + '.' + v.name + '.values.position'}(pos) -> _offset {
+  _offset := add(${name + '.' + v.name}.position(pos), ${arrayLengthSize})
 }
 `,
         required: [],
@@ -1001,11 +995,23 @@ function ${name + '.' + v.name + '.index'}() -> _index {
       },
       [name + '.' + v.name + '.size']: {
         method: `
-function ${name + '.' + v.name + '.size'}() -> _size {
-  _size := ${v.value.dtype.length}
+function ${name + '.' + v.name + '.size'}(pos) -> _size {
+  _size := ${v.value.dtype.type === 'array' && !v.value.dtype.length
+    ? `add(mul(${name + '.' + v.name + '.length'}(pos), ${v.value.dtype.itemlength}), ${arrayLengthSize})`
+    : v.value.dtype.length}
 }
 `,
-        required: [],
+        required: v.value.dtype.type === 'array' && !v.value.dtype.length
+          ? [name + '.' + v.name + '.length']
+          : [],
+      },
+      [name + '.' + v.name + '.length']: {
+        method: `
+function ${name + '.' + v.name}.length(pos) -> _length {
+  _length := mslice(${name + '.' + v.name + '.position'}(pos), ${arrayLengthSize})
+}
+`,
+        required: [],///[name + '.' + v.name + '.position'],
       },
     }), {});
 

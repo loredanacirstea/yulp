@@ -2,28 +2,53 @@ import fs from 'fs';
 import yaml from 'yaml';
 import { utils } from 'ethers';
 import { abiBuildSigsTopics, abiToStr } from './abiextract.js';
+import { dtypedefs } from './dtypes_yml.js';
 
-const dtypeSample = yaml.parse(fs.readFileSync('./src/dtypes.yml', 'utf8'));
+const dtypeSample = yaml.parse(dtypedefs);
 let dtypes = {};
 
-const dtypeName = dtype => dtype.type + (dtype.size || '');
+const typeChoice = {
+  basetype: 0,
+  contig: 1,
+  namedtype: 2,
+  composed: 3, // a type of contig, maybe we can abstract
+  array: 4,  // if size => static arrays, else dynamic arrays
+}
+// 5: polimorphism / generics
+// 6: derived type
+
+// TODO: contigs(T) ? also be named as arrays, with T's name included
+// simple names -> abstractions or aliases
+
+const defaultTypeName = dtype => dtype.type + (dtype.size || '');
+const customTypeName = {
+  4: dtype => dtype.inputs[0].type + defaultTypeName(dtype),
+}
+
+const dtypeName = dtype => (customTypeName[dtype.type_choice] || defaultTypeName)(dtype);
 const dtypeId = dtypeName;
 const getById = dtypeid => dtypes[dtypeid];
 const size = (dtype) => {
+  if (typeof dtype === 'string') {
+    dtype = getById(dtype);
+  }
+
   switch(dtype.type_choice) {
-    case 0:
+    case typeChoice.basetype:
       return dtype.size;
-    case 1:
-      return dtype.size * sizeById(dtype.inputs[0].type);
-    case 2:
-      return sizeById(dtype.inputs[0].type);
+    case typeChoice.contig:
+      return dtype.size * size(dtype.inputs[0].type);
+    case typeChoice.namedtype:
+      return size(dtype.inputs[0].type);
+    case typeChoice.array:
+      // static array
+      if (dtype.size) return dtype.size * size(dtype.inputs[0].type);
+
+      // dynamic array
+      return null;
     default:
       return dtype.size;
   }
-}
-const sizeById = dtypeid => {
-  const dtype = getById(dtypeid);
-  return size(dtype);
 }
 
 const sizeBytes = dtype => {
@@ -44,7 +69,6 @@ module.exports = {
   dtypeutils: {
     getById,
     size,
-    sizeById,
     sizeBytes,
     stringToSig,
   }

@@ -1,4 +1,4 @@
-object "SimpleStore" {
+object "ComplexStore" {
   code {
     datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
     return(0, datasize("Runtime"))
@@ -7,12 +7,16 @@ object "SimpleStore" {
     code {
       const _calldata := 128
       // calldatacopy(_calldata, 0, 36)
-      calldatacopy(_calldata, 0, 56)
+
+      // 4 + 4 + 32 + 8 + 4 + 12 = 64
+      calldatacopy(_calldata, 0, 64)
 
       // dtmstruct Calldata2(abi"(EthereumFunctionSignature sig, u256 val)")
       dtmstruct Calldata(
           sig: EthereumFunctionSignature,
           val: u32,
+          somearr: u32array2,
+          somearr2: u32array,
           val2: u256
       )
 
@@ -22,14 +26,26 @@ object "SimpleStore" {
         sstore(0, Calldata.val(_calldata)) // sstore calldata value
       }
 
-      case dtsig"function get() returns (u32)" {
+      case dtsig"function get() view public returns (u32)" {
         mstore(0, sload(0))
         return (0, 32)
       }
 
-      case dtsig"function addone(u256) returns (u256)" {
+      case dtsig"function addone(u256) view public returns (u256)" {
         mstore(0, add(Calldata.val2(_calldata), 1))
         return (0, 32)
+      }
+
+      case dtsig"function getArrayItem() view public returns(u32)" {
+        let index := 0
+        mstore(0, Calldata.somearr(_calldata, index))
+        return (0, 4)
+      }
+
+      case dtsig"function getDynArrayItem() view public returns(u32)" {
+        let index := 1
+        mstore(0, Calldata.somearr2(_calldata, index))
+        return (0, 4)
       }
     }
   }
