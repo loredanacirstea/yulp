@@ -885,6 +885,10 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
   function (d) {
     const name = d[2].value;
     const properties = _filter(d[6], 'DTypeMemoryStructIdentifier');
+    const sizeLen = 4;
+    const sizeCount = properties.length;
+    const sizesSize = sizeLen * sizeCount;
+
 
     let methodList = properties.map(v => name + '.' + v.name);
 
@@ -898,7 +902,28 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
       }
     }
 
-    let dataMap = properties.reduce((acc, v, i) => Object.assign(acc, {
+    let dataMap =  {};
+    properties.map((v, i) => {
+      const pos = '0x' + (0 * i).toString(16).padStart(2,'0');
+      dataMap[`CalldataSizes.size${i}.position`] = {
+        method: `
+  function CalldataSizes.size${i}.position(pos) -> _offset {
+    _offset := add(${pos}, add(pos, 0))
+  }
+  `,
+      required: [],
+      };
+      dataMap[`CalldataSizes.size${i}`] = {
+        method: `
+  function CalldataSizes.size${i} (pos) -> res {
+    res := mslice(CalldataSizes.size${i}.position(pos), ${sizeLen})
+  }
+  `,
+        required: [`CalldataSizes.size${i}.position`],
+      };
+    });
+
+    properties.reduce((acc, v, i) => Object.assign(dataMap, acc, {
       [name + '.' + v.name]: {
         size: v.value.type === 'ArraySpecifier'
           ? ('mul('
@@ -918,11 +943,12 @@ function ${name + '.' + v.name}(pos, i) -> res {
 `
 : `
 function ${name + '.' + v.name}(pos) -> res {
-  res := mslice(${name + '.' + v.name}.position(pos), ${v.value.dtype.length})
+  res := mslice(${name + '.' + v.name}.position(safeAdd(pos, ${sizesSize})), CalldataSizes.size${i}(pos))
 }
 `,
         required: [
           name + '.' + v.name + '.position',
+          `CalldataSizes.size${i}`,
         ],
       },
       [name + '.' + v.name + '.keccak256']: {

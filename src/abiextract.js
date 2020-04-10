@@ -104,9 +104,8 @@ export const abiBuildSigsTopics = (signatures=[], topics=[]) => {
     if (!match) match = sig.match(funcRegexFallb);
     return match;
   });
-  console.log('funcMatches', funcMatches);
-  const topicMatches = topics.map(topic => topic.match(eventRegex2));
 
+  const topicMatches = topics.map(topic => topic.match(eventRegex2));
   return abiBuildMatches(funcMatches, topicMatches);
 }
 
