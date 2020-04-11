@@ -11,7 +11,7 @@ const typeChoice = {
   basetype: 0,
   contig: 1,
   namedtype: 2,
-  composed: 3, // a type of contig, maybe we can abstract
+  namedtuple: 3, // a type of contig, e.g. structs, named tuples - maybe we can abstract
   array: 4,  // if size => static arrays, else dynamic arrays
 }
 // 5: polimorphism / generics
@@ -40,6 +40,8 @@ const size = (dtype) => {
       return dtype.size * size(dtype.inputs[0].type);
     case typeChoice.namedtype:
       return size(dtype.inputs[0].type);
+    case typeChoice.namedtuple:
+      return dtype.inputs.map(inp => size(inp.type)).reduce((sum, val) => sum + val);
     case typeChoice.array:
       // static array
       if (dtype.size) return dtype.size * size(dtype.inputs[0].type);

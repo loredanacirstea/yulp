@@ -932,6 +932,7 @@ var grammar = {
             const arrayLengthSize = 4;
             const isArray = v => v.value.dtype.type === 'array';
             const isDynamicArray = v => isArray(v) && !v.value.dtype.length;
+            const isNamedTuple = v => v.value.dtype.type_choice === 3;
         
             console.log('DTypeMemoryStructDeclaration properties', properties);
         
@@ -939,7 +940,8 @@ var grammar = {
         
             console.log('DTypeMemoryStructDeclaration methodList', methodList);
         
-            let dataMap = properties.reduce((acc, v, i) => Object.assign(acc, {
+            let dataMap = properties.reduce((acc, v, i) => {
+              const methodMap = {
               [name + '.' + v.name]: {
                 size: v.value.dtype.length,
                 offset: addValues(methodList.slice(0, i)
@@ -1046,7 +1048,27 @@ var grammar = {
         `,
                 required: [],
               },
-            }), {});
+            }
+        
+            if (isNamedTuple(v)) {
+              const { dtype } = v.value;
+              dtype.inputs.forEach(inp => {
+                // TODO: this is a recursive process if we want access to nested components
+                // TODO: check size / support dynamic components
+                const size = dtypeutils.sizeBytes(inp.type);
+                methodMap[name + '.' + v.name + '.' + inp.label] = {
+                  method: `
+        function ${name + '.' + v.name + '.' + inp.label}(pos) -> res {
+          res := mslice(${name + '.' + v.name + '.position'}(pos), ${size})
+        }
+        `,
+                  required: [name + '.' + v.name + '.position'],
+                }
+              })
+            }
+        
+            return Object.assign(acc, methodMap);
+            }, {});
         
             dataMap[name + '.keccak256'] = {
               method: `

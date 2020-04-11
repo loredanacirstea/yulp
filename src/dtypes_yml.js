@@ -84,6 +84,33 @@ const dtypedefs = `
       label: u32_[*]
   outputs: []
   optionals: []
+
+- type: byte
+  size: 20
+  type_choice: 1
+  inputs:
+    - type: byte1
+      label: bit1_[x]
+  outputs: []
+  optionals: []
+
+- type: address
+  type_choice: 2
+  inputs:
+    - type: byte20
+      label: address
+  outputs: []
+  optionals: []
+
+- type: Balance
+  type_choice: 3
+  inputs:
+    - type: address
+      label: token
+    - type: u32
+      label: value
+  outputs: []
+  optionals: []
 `
 
 export { dtypedefs };
