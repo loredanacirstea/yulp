@@ -888,21 +888,13 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
     const name = d[2].value;
     const properties = _filter(d[6], 'DTypeMemoryStructIdentifier');
     const arrayLengthSize = 4;
+    const isArray = v => v.value.dtype.type === 'array';
+    const isDynamicArray = v => isArray(v) && !v.value.dtype.length;
 
 
     let methodList = properties.map(v => name + '.' + v.name);
 
-    // check for array length specifiers
-    for (var p = 0; p < properties.length; p++) {
-      const prop = properties[p];
 
-      if (prop.value.type === 'ArraySpecifier'
-        && methodList.indexOf(name + '.' + prop.name + '.length') === -1) {
-        throw new Error(`In memory struct "${name}", array property "${prop.name}" requires a ".length" property.`);
-      }
-    }
-
-    // properties.reduce((acc, v, i) => Object.assign(dataMap, acc, {
     let dataMap = properties.reduce((acc, v, i) => Object.assign(acc, {
       [name + '.' + v.name]: {
         size: v.value.dtype.length,
@@ -910,7 +902,7 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
           .map(name => acc[name].size)),
         slice: `mslice(${addValues(['pos'].concat(methodList.slice(0, i)
           .map(name => acc[name].size)))}, ${v.value.dtype.length})`,
-        method: v.value.dtype.type === 'array' ?
+        method: isArray(v) ?
 `
 function ${name + '.' + v.name}(pos, i) -> res {
   res := mslice(add(${name + '.' + v.name}.${v.value.dtype.length ? 'position' : 'values.position'}(pos),
@@ -924,7 +916,7 @@ function ${name + '.' + v.name}(pos) -> res {
 `,
         required: [
           name + '.' + v.name + '.position',
-        ].concat(v.value.dtype.type === 'array' && !v.value.dtype.length
+        ].concat(isDynamicArray(v)
           ? [name + '.' + v.name + '.values.position']
           : []
         ),
@@ -952,12 +944,12 @@ function ${name + '.' + v.name + '.position'}(pos) -> _offset {
   _offset := ${addValues(['pos']
       .concat(methodList.slice(0, i).map(name => acc[name].size))
       .concat(methodList.slice(0, i)
-        .filter((name, ind) => properties[ind].value.dtype.type === 'array' && !properties[ind].value.dtype.length)
+        .filter((name, ind) => isDynamicArray(properties[ind]))
         .map(name => name + '.size(pos)'))
     )}
 }
 `,
-        required: methodList.filter((name, ind) => properties[ind].value.dtype.type === 'array' && !properties[ind].value.dtype.length)
+        required: methodList.filter((name, ind) => isDynamicArray(properties[ind]))
           .map(name => name + '.size'),
       },
       [name + '.' + v.name + '.values.position']: {
@@ -993,12 +985,12 @@ function ${name + '.' + v.name + '.index'}() -> _index {
       [name + '.' + v.name + '.size']: {
         method: `
 function ${name + '.' + v.name + '.size'}(pos) -> _size {
-  _size := ${v.value.dtype.type === 'array' && !v.value.dtype.length
+  _size := ${isDynamicArray(v)
     ? `add(mul(${name + '.' + v.name + '.length'}(pos), ${v.value.dtype.itemlength}), ${arrayLengthSize})`
     : v.value.dtype.length}
 }
 `,
-        required: v.value.dtype.type === 'array' && !v.value.dtype.length
+        required: isDynamicArray(v)
           ? [name + '.' + v.name + '.length']
           : [],
       },
@@ -1008,7 +1000,7 @@ function ${name + '.' + v.name}.length(pos) -> _length {
   _length := mslice(${name + '.' + v.name + '.position'}(pos), ${arrayLengthSize})
 }
 `,
-        required: [],///[name + '.' + v.name + '.position'],
+        required: [],
       },
     }), {});
 
