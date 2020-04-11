@@ -111,6 +111,24 @@ const dtypedefs = `
       label: value
   outputs: []
   optionals: []
+
+- type: Balances
+  type_choice: 4
+  inputs:
+    - type: Balance
+      label: balance_[*]
+  outputs: []
+  optionals: []
+
+- type: Rectangle
+  type_choice: 3
+  inputs:
+    - type: u32array2
+      label: dimensions
+    - type: u32
+      label: value
+  outputs: []
+  optionals: []
 `
 
 export { dtypedefs };

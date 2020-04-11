@@ -57,6 +57,15 @@ const sizeBytes = dtype => {
   return Math.ceil(size(dtype) / 8);
 }
 
+const getByIdWithLength = dtypeid => {
+  const dtype = getById(dtypeid);
+  dtype.length = sizeBytes(dtype);
+  if (dtype.type === 'array') {
+    dtype.itemlength = sizeBytes(dtype.inputs[0].type);
+  }
+  return dtype;
+}
+
 const stringToSig = str =>  {
   const abi = abiBuildSigsTopics([str.slice(2)]);
   // TODO check if abi types are dtypes
@@ -69,9 +78,10 @@ console.log('dtypes', dtypes);
 module.exports = {
   dtypes,
   dtypeutils: {
-    getById,
     size,
     sizeBytes,
+    getById,
+    getByIdWithLength,
     stringToSig,
   }
 }

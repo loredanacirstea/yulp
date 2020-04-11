@@ -24,6 +24,7 @@
     MAX_UINTLiteral: /(?:MAX_UINT)/,
     SigLiteral: /(?:sig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     DTSigLiteral: /(?:dtsig)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
+    DTIdentifier: /(?:dt)\.(?:\w*)/,
     DTypeAbiLiteral: /(?:abi)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     TopicLiteral: /(?:topic)"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*"/,
     codeKeyword: /(?:code)(?:\s)/,
@@ -698,21 +699,27 @@ MemoryStructIdentifier -> %Identifier _ ":" _ ( NumericLiteral | ArraySpecifier 
     };
   }
 %}
-DTypeMemoryStructIdentifier -> %Identifier _ ":" _ %Identifier {%
+DTypeIdentifier -> %DTIdentifier {%
   function (d) {
+    const typename = d[0].value.slice(3);  // remove dt.
+
     // TODO anything to check?
+    const dtype = dtypeutils.getByIdWithLength(typename);
 
-    const value = d[4];
-    value.dtype = dtypeutils.getById(value.value);
-    value.dtype.length = dtypeutils.sizeBytes(value.dtype);
-    if (value.dtype.type === 'array') {
-      value.dtype.itemlength = dtypeutils.sizeBytes(value.dtype.inputs[0].type);
+    return {
+      type: 'DTypeIdentifier',
+      name: typename,
+      value: d[0],
+      dtype,
     }
-
+  }
+%}
+DTypeMemoryStructIdentifier -> %Identifier _ ":" _ DTypeIdentifier {%
+  function (d) {
     return {
       type: 'DTypeMemoryStructIdentifier',
       name: d[0].value,
-      value,
+      value: d[4],
     };
   }
 %}
@@ -896,8 +903,8 @@ DTypeMemoryStructDeclaration -> "dtmstruct" _ %Identifier _ "(" _ ")" {% functio
     let methodList = properties.map(v => name + '.' + v.name);
 
 
-    let dataMap = properties.reduce((acc, v, i) => {
-      const methodMap = {
+    buildMethodsProperty = (name, properties, methodList, acc, v, i) => {
+      let methodMap = {
       [name + '.' + v.name]: {
         size: v.value.dtype.length,
         offset: addValues(methodList.slice(0, i)
@@ -1008,23 +1015,28 @@ function ${name + '.' + v.name}.length(pos) -> _length {
 
     if (isNamedTuple(v)) {
       const { dtype } = v.value;
-      dtype.inputs.forEach(inp => {
-        // TODO: this is a recursive process if we want access to nested components
-        // TODO: check size / support dynamic components
-        const size = dtypeutils.sizeBytes(inp.type);
-        methodMap[name + '.' + v.name + '.' + inp.label] = {
-          method: `
-function ${name + '.' + v.name + '.' + inp.label}(pos) -> res {
-  res := mslice(${name + '.' + v.name + '.position'}(pos), ${size})
-}
-`,
-          required: [name + '.' + v.name + '.position'],
+      const menthodL = JSON.parse(JSON.stringify(methodList.slice(0, i)));
+      const subproperties = JSON.parse(JSON.stringify(properties));
+      const basename = name + '.' + v.name;
+      dtype.inputs.forEach((inp, ind) => {
+        const inpvalue = {
+          dtype: dtypeutils.getByIdWithLength(inp.type),
         }
-      })
+        const dtproperty = {
+          type: 'DTypeIdentifier',
+          name: inp.label,
+          value: inpvalue,
+        }
+        subproperties.push(dtproperty);
+        menthodL.push(name + '.' + v.name + '.' + inp.label);
+        methodMap = Object.assign(methodMap, buildMethodsProperty(basename, subproperties, menthodL, Object.assign({}, acc, methodMap), dtproperty, i+ind));
+      });
     }
 
     return Object.assign(acc, methodMap);
-    }, {});
+    }
+
+    let dataMap = properties.reduce((acc, v, i) => buildMethodsProperty(name, properties, methodList, acc, v, i), {});
 
     dataMap[name + '.keccak256'] = {
       method: `
