@@ -51,6 +51,18 @@ object "ComplexStore" {
         return (0, 32)
       }
 
+      case 0xf8b2cb4a {
+        let encoded := 0
+        Calldata.somearr.encodeTight(_calldata, encoded)
+        return (encoded, Calldata.somearr.size(_calldata))
+      }
+
+      case 0xf8b2cb4b {
+        let encoded := 0
+        Calldata.somearr2.encodeTight(_calldata, encoded)
+        return (encoded, Calldata.somearr2.size(_calldata))
+      }
+
       case dtsig"function storeBalance(address owner, Balance balance)" {
         sstore(0, Calldata.balance.value(_calldata))
         sstore(4, Calldata.balance.token(_calldata))
@@ -60,6 +72,13 @@ object "ComplexStore" {
         mstore(0, sload(0))
         mstore(32, sload(4))
         return (0, 64)
+      }
+
+      case 0xf8b2cb4e {
+        let encoded := 0
+        Calldata.balance.encodeTight(_calldata, encoded)
+
+        return (encoded, Calldata.balance.size(_calldata))
       }
 
       case dtsig"function getRectangle() view public returns (Rectangle rect)" {
