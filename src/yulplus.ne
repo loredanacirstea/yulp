@@ -1009,7 +1009,7 @@ function ${name + '.' + v.name}.length(pos) -> _length {
   _length := mslice(${name + '.' + v.name + '.position'}(pos), ${arrayLengthSize})
 }
 `,
-        required: [],
+        required: [name + '.' + v.name + '.position'],
       },
       [name + '.' + v.name + '.encodeTight']: {
         method: isArray(v)
@@ -1041,7 +1041,7 @@ function ${name + '.' + v.name}.encodeTight(pos, newpos) {
 }
 `, // res := shl(mul(sub(32, ${v.value.dtype.length}), 8), ${name + '.' + v.name}(pos))
         required: isArray
-          ?  [`${name + '.' + v.name}.length`]
+          ? [`${name + '.' + v.name}.length`, name + '.' + v.name]
           : [],
       },
     }
