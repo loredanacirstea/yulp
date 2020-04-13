@@ -45,9 +45,8 @@ const size = (dtype) => {
     case typeChoice.array:
       // static array
       if (dtype.size) return dtype.size * size(dtype.inputs[0].type);
-
       // dynamic array
-      return null;
+      return 0;
     default:
       return dtype.size;
   }

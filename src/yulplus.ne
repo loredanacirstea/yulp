@@ -785,8 +785,8 @@ function ${name + '.' + v.name + '.keccak256'}(pos) -> _hash {
   _hash := keccak256(${name + '.' + v.name + '.position'}(pos),
     ${v.value.type === 'ArraySpecifier'
       ? `mul(${name + '.' + v.name + '.length'}(pos),
-          ${name + '.' + v.name + '.size'}())`
-      : `${name + '.' + v.name + '.size'}()`})
+          ${name + '.' + v.name + '.size'}(pos))`
+      : `${name + '.' + v.name + '.size'}(pos)`})
 }
 `,
         required: [
@@ -958,7 +958,7 @@ function ${name + '.' + v.name + '.position'}(pos) -> _offset {
     )}
 }
 `,
-        required: methodList.filter((name, ind) => isDynamicArray(properties[ind]))
+        required: methodList.slice(0, i).filter((name, ind) => isDynamicArray(properties[ind]))
           .map(name => name + '.size'),
       },
       [name + '.' + v.name + '.values.position']: {
@@ -967,7 +967,7 @@ function ${name + '.' + v.name + '.values.position'}(pos) -> _offset {
   _offset := add(${name + '.' + v.name}.position(pos), ${arrayLengthSize})
 }
 `,
-        required: [],
+        required: [], //[name + '.' + v.name + '.position'],
       },
       [name + '.' + v.name + '.offset']: {
         method: `
@@ -1019,18 +1019,25 @@ function ${name + '.' + v.name}.encodeTight(pos, newpos) {
   let length := ${name + '.' + v.name}.length(pos)
   mstore(newpos, shl(mul(28, 8), length))
   let newposi := add(newpos, 4)
+  let posi := add(pos, 4)
   for { let i := 0 } lt(i, length) { i := add(i, 1) } {
-    newposi := add(newposi, mul(i, ${v.value.dtype.itemlength}))
-    mstore(newposi, shl(mul(sub(32, ${v.value.dtype.itemlength}), 8), ${name + '.' + v.name}(pos, i)))
+    let addition := mul(i, ${v.value.dtype.itemlength})
+    newposi := add(newposi, addition)
+    posi := add(posi, addition)
+    ${name + '.' + v.name + '.' + v.value.dtype.inputs[0].label + '.encodeTight'}(posi, newposi)
   }
 }
 `
           : `
 function ${name + '.' + v.name}.encodeTight(pos, newpos) {
   let length := ${name + '.' + v.name}.length(pos)
+  let newposi := newpos
+  let posi := pos
   for { let i := 0 } lt(i, length) { i := add(i, 1) } {
-    let newposi := add(newpos, mul(i, ${v.value.dtype.itemlength}))
-    mstore(newposi, shl(mul(sub(32, ${v.value.dtype.itemlength}), 8), ${name + '.' + v.name}(pos, i)))
+    let addition := mul(i, ${v.value.dtype.itemlength})
+    newposi := add(newposi, addition)
+    posi := add(posi, addition)
+    ${name + '.' + v.name + '.' + v.value.dtype.inputs[0].label + '.encodeTight'}(posi, newposi)
   }
 }
   `
@@ -1039,11 +1046,37 @@ function ${name + '.' + v.name}.encodeTight(pos, newpos) {
 function ${name + '.' + v.name}.encodeTight(pos, newpos) {
   mstore(newpos, shl(mul(sub(32, ${v.value.dtype.length}), 8), ${name + '.' + v.name}(pos)))
 }
-`, // res := shl(mul(sub(32, ${v.value.dtype.length}), 8), ${name + '.' + v.name}(pos))
-        required: isArray
-          ? [`${name + '.' + v.name}.length`, name + '.' + v.name]
-          : [],
+`,
+        required: isArray(v)
+          ? [
+              `${name + '.' + v.name}.length`,
+              name + '.' + v.name + '.' + v.value.dtype.inputs[0].label + '.encodeTight'
+            ]
+          : [name + '.' + v.name],
       },
+    }
+
+    if (isArray(v)) {
+      const { dtype } = v.value;
+      const dtitem = dtype.inputs[0];
+      const dtproperty = {
+        type: 'DTypeIdentifier',
+        name: dtitem.label,
+        value: { dtype: dtypeutils.getByIdWithLength(dtitem.type) },
+      }
+      const menthodL = JSON.parse(JSON.stringify(methodList.slice(0, i)));
+      menthodL.push(name + '.' + v.name + '.' + dtitem.label);
+      const subproperties = JSON.parse(JSON.stringify(properties));
+      subproperties.push(dtproperty);
+
+      methodMap = Object.assign(methodMap, buildMethodsProperty(
+        name + '.' + v.name,
+        subproperties,
+        menthodL,
+        Object.assign({}, acc, methodMap),
+        dtproperty,
+        i,
+      ));
     }
 
     if (isNamedTuple(v)) {
@@ -1053,18 +1086,22 @@ function ${name + '.' + v.name}.encodeTight(pos, newpos) {
       const components = [];
       const basename = name + '.' + v.name;
       dtype.inputs.forEach((inp, ind) => {
-        const inpvalue = {
-          dtype: dtypeutils.getByIdWithLength(inp.type),
-        }
         const dtproperty = {
           type: 'DTypeIdentifier',
           name: inp.label,
-          value: inpvalue,
+          value: { dtype: dtypeutils.getByIdWithLength(inp.type) },
         }
         subproperties.push(dtproperty);
         components.push(dtproperty);
         menthodL.push(name + '.' + v.name + '.' + inp.label);
-        methodMap = Object.assign(methodMap, buildMethodsProperty(basename, subproperties, menthodL, Object.assign({}, acc, methodMap), dtproperty, i+ind));
+        methodMap = Object.assign(methodMap, buildMethodsProperty(
+          basename,
+          subproperties,
+          menthodL,
+          Object.assign({}, acc, methodMap),
+          dtproperty,
+          i+ind,
+        ));
       });
 
       methodMap[name + '.' + v.name + '.encodeTight'] = {
@@ -1079,17 +1116,17 @@ function ${name + '.' + v.name + '.encodeTight'}(pos, newpos) {
             .map(inp => `${name + '.' + v.name + '.' + inp.name}.size(pos)`)
         )
     );
-    // return `mstore(add(newpos, ${size}), ${methodbase}.encodeTight(pos))`
+
     return `${methodbase}.encodeTight(pos, add(newpos, ${size}))`
   }).join(`
   `)}
 }
 `,
         required: components.map(inp => {
-           return [
-            name + '.' + v.name + '.' + inp.name + '.size',
-            name + '.' + v.name + '.' + inp.name + '.encodeTight',
-          ]}).reduce((acc, val) => acc.concat(val), []),
+          const req = [name + '.' + v.name + '.' + inp.name + '.encodeTight'];
+          if (isDynamicArray(inp)) req.push(name + '.' + v.name + '.' + inp.name + '.size');
+          return req;
+        }).reduce((acc, val) => acc.concat(val), []),
       }
     }
 

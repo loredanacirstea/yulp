@@ -42,6 +42,23 @@ const dtypedefs = `
   outputs: []
   optionals: []
 
+- type: bool
+  type_choice: 2
+  inputs:
+    - type: byte1
+      label: byte1
+  outputs: []
+  optionals: []
+
+- type: u
+  type_choice: 1
+  size: 8
+  inputs:
+    - type: bit1
+      label: bit1_1
+  outputs: []
+  optionals: []
+
 - type: u
   type_choice: 1
   size: 32
@@ -68,11 +85,19 @@ const dtypedefs = `
   outputs: []
   optionals: []
 
+- type: dTypeSignature
+  type_choice: 2
+  inputs:
+    - type: byte4
+      label: sig
+  outputs: []
+  optionals: []
+
 - type: array
   type_choice: 4
   inputs:
     - type: u32
-      label: u32_[*]
+      label: u32item
   outputs: []
   optionals: []
 
@@ -81,7 +106,7 @@ const dtypedefs = `
   type_choice: 4
   inputs:
     - type: u32
-      label: u32_[*]
+      label: u32item
   outputs: []
   optionals: []
 
@@ -94,11 +119,51 @@ const dtypedefs = `
   outputs: []
   optionals: []
 
+- type: array
+  type_choice: 4
+  inputs:
+    - type: byte
+      label: byteitem
+  outputs: []
+  optionals: []
+
+- type: array
+  type_choice: 4
+  inputs:
+    - type: u8
+      label: u8item
+  outputs: []
+  optionals: []
+
+- type: array
+  type_choice: 4
+  inputs:
+    - type: bool
+      label: boolitem
+  outputs: []
+  optionals: []
+
 - type: address
   type_choice: 2
   inputs:
     - type: byte20
       label: address
+  outputs: []
+  optionals: []
+
+- type: char
+  type_choice: 2
+  inputs:
+    - type: byte1
+      label: char
+  outputs: []
+  optionals: []
+
+- type: array
+  type_choice: 4
+  inputs:
+    - type: char
+      label: charitem
   outputs: []
   optionals: []
 
@@ -112,11 +177,11 @@ const dtypedefs = `
   outputs: []
   optionals: []
 
-- type: Balances
+- type: array
   type_choice: 4
   inputs:
     - type: Balance
-      label: balance_[*]
+      label: balanceitem
   outputs: []
   optionals: []
 
@@ -127,6 +192,42 @@ const dtypedefs = `
       label: dimensions
     - type: u32
       label: value
+  outputs: []
+  optionals: []
+
+- type: ProgStep
+  type_choice: 3
+  inputs:
+    - type: byte4
+      label: typeid
+    - type: u8array
+      label: inputIndexes
+    - type: boolarray
+      label: outputHasSlotSize
+  outputs: []
+  optionals: []
+
+- type: array
+  type_choice: 4
+  inputs:
+    - type: ProgStep
+      label: stepitem
+  outputs: []
+  optionals: []
+
+- type: Type
+  type_choice: 3
+  inputs:
+    - type: dTypeSignature
+      label: sig_bytecode
+    - type: dTypeSignature
+      label: sig_in
+    - type: dTypeSignature
+      label: sig_out
+    - type: u32
+      label: ssize
+    - type: ProgSteparray
+      label: steps
   outputs: []
   optionals: []
 `
