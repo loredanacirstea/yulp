@@ -1057,13 +1057,19 @@ var grammar = {
               },
               [name + '.' + v.name + '.encodeTight']: {
                 method: isArray(v)
-                ? (isDynamicArray(v)
                   ? `
         function ${name + '.' + v.name}.encodeTight(pos, newpos) {
           let length := ${name + '.' + v.name}.length(pos)
-          mstore(newpos, shl(mul(28, 8), length))
-          let newposi := add(newpos, 4)
-          let posi := add(pos, 4)
+          ${
+            isDynamicArray(v)
+              ? `
+            mstore(newpos, shl(mul(28, 8), length))
+            let newposi := add(newpos, 4)
+            let posi := add(pos, 4)`
+              : `
+            let newposi := newpos
+            let posi := pos`
+          }
           for { let i := 0 } lt(i, length) { i := add(i, 1) } {
             let addition := mul(i, ${v.value.dtype.itemlength})
             newposi := add(newposi, addition)
@@ -1072,20 +1078,6 @@ var grammar = {
           }
         }
         `
-                  : `
-        function ${name + '.' + v.name}.encodeTight(pos, newpos) {
-          let length := ${name + '.' + v.name}.length(pos)
-          let newposi := newpos
-          let posi := pos
-          for { let i := 0 } lt(i, length) { i := add(i, 1) } {
-            let addition := mul(i, ${v.value.dtype.itemlength})
-            newposi := add(newposi, addition)
-            posi := add(posi, addition)
-            ${name + '.' + v.name + '.' + v.value.dtype.inputs[0].label + '.encodeTight'}(posi, newposi)
-          }
-        }
-          `
-                  )
                 : `
         function ${name + '.' + v.name}.encodeTight(pos, newpos) {
           mstore(newpos, shl(mul(sub(32, ${v.value.dtype.length}), 8), ${name + '.' + v.name}(pos)))
